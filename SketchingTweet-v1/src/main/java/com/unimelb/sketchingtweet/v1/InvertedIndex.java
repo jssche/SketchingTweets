@@ -2,6 +2,7 @@ package com.unimelb.sketchingtweet.v1;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import static java.lang.Math.ceil;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,6 +19,11 @@ public class InvertedIndex {
     
     private void initialize(){       
         this.table = new MyHashTable();
+//        System.out.println(this.table.get("xss"));
+//        this.table.put("thank", 0);
+//        System.out.println(this.table.get("thank"));
+//        this.table.put("thank", 52);
+//        System.out.println(this.table.get("thank").getKey());
         
         Scanner inputStream = null; 
         try{
@@ -44,17 +50,17 @@ public class InvertedIndex {
             tweetID = jsonLine.getString("id_str");            
             textList = this.cleanTweet(jsonLine.getString("text"));            
             if(!textList.isEmpty()){
+                numTweet++;
                 Pair tweet = new Pair(numTweet, textList);
 //                System.out.println(tweetID);
-//                System.out.println(tweet);
+                System.out.println(tweet);
                 for(int i=0;i<textList.size();i++){
-                    this.table.put(textList.get(i), tweetID);
+                    this.table.put(textList.get(i), numTweet);
                 }
             }
             textList.clear();
-            numTweet++;
         } catch (JSONException e) {
-            System.out.println("not a json file");
+//            System.out.println("not a json file");
         }
     }
     
@@ -75,18 +81,72 @@ public class InvertedIndex {
     }
     
     
-    public String findSimilarTweet(String newTweet){
+    public String findSimilarTweet(String newTweet, double similarity){
+//      get the document id list for each of the word in the new tweet
+        int totalWords;
         ArrayList<String> newTweetList = new ArrayList();
+        
         newTweetList = this.cleanTweet(newTweet);
         System.out.println(newTweetList);
-        return "";
+        totalWords = newTweetList.size();
+        
+        MyHashNode[] wordIndex = new MyHashNode[totalWords];
+        for(int i=0;i<totalWords;i++){
+            wordIndex[i] = this.table.get(newTweetList.get(i));
+            System.out.println(wordIndex[i]);
+        }
+        
+//      linear search
+        int latestDocID = 0;
+        ArrayList<Integer> latestDocIndex = new ArrayList<Integer>();
+        int docCountBenchmark = (int)ceil(similarity * totalWords);
+//        System.out.println(docCountBenchmark);
+        int nullCount = 0;
+         
+        while(true){
+//          latestDocID stores the max document id (the larger doc id is, the newer the doc is)
+//          latestDocIndex stores the index of the words in the new tweet that has the max doc id at front of the list/also appeared in the latest doc
+            for(int i=0;i<totalWords;i++){
+                if(wordIndex[i]!=null){
+                    if((int)wordIndex[i].getKey() > latestDocID){
+                        latestDocID = (int)wordIndex[i].getKey();
+                        latestDocIndex.clear();
+                        latestDocIndex.add(i);
+                    }else if((int)wordIndex[i].getKey() == latestDocID){
+                        latestDocIndex.add(i);
+                    } 
+                }else{
+                    nullCount += 1;
+                }
+            }
+            
+//          check if the num of words that has the max doc id meets the similarity criteria 
+//          if yes, return the doc id
+//          if no, move the pointers of the words that have the max doc id to the next doc id and restores the maxDocID
+            if(nullCount == totalWords){
+                return "No similar tweet";
+            }else{
+                if(latestDocIndex.size() >= docCountBenchmark){
+                    return Integer.toString(latestDocID);
+                }else{
+                    for(int i=0;i<latestDocIndex.size();i++){
+                        wordIndex[latestDocIndex.get(i)] = wordIndex[latestDocIndex.get(i)].getNext();
+                    }
+                    latestDocIndex.clear();
+                    latestDocID = 0;
+                    nullCount = 0;
+                }
+            }              
+        }        
     }
     
     
     public static void main(String[] arg){
         InvertedIndex fileIndex = new InvertedIndex();
         fileIndex.initialize();
-        fileIndex.findSimilarTweet("spend more time trying to change someone and less time trying to love and understand them");
-
+        System.out.println("doc id: " + fileIndex.findSimilarTweet("sxx sxx xxx", 0.5));
+        System.out.println("doc id: " + fileIndex.findSimilarTweet("Latest level: 0.8815m at 31/03/2016 23:00:00(GMT). Further information available at https://t.co/Jy7C3IU3nQ #riverlevels", 0.5));
+        System.out.println("doc id: " + fileIndex.findSimilarTweet("spend more time trying to change someone and less time trying to love and understand them xxx", 0.5));
+        System.out.println("doc id: " + fileIndex.findSimilarTweet("Get Weather Updates from The Weather Channel", 1));
     }
 }

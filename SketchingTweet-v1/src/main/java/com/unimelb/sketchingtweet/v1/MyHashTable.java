@@ -1,13 +1,8 @@
 package com.unimelb.sketchingtweet.v1;
 
 
-import java.util.Deque;
-import java.util.LinkedList;
-
-
 public class MyHashTable {
-//    TODO: customized linked list to replace deque
-    private Pair<String, Deque<String>>[] table;
+    private Pair<String, MyHashNode<Integer>>[] table;
     private int size;
     private final int maxSize = 10000;
     
@@ -25,7 +20,7 @@ public class MyHashTable {
     }
     
     
-    public Deque<String> get(String key){
+    public MyHashNode<Integer> get(String key){
         int index = this.getIndex(key);
         
         if(this.table[index]==null){
@@ -36,14 +31,15 @@ public class MyHashTable {
     }
     
     
-    public void put(String key, String value){
+    public void put(String key, int value){
         int index = this.getIndex(key);
         if(this.table[index] == null){
-            this.table[index] = new Pair(key, new LinkedList<String>());
-            this.table[index].getValue().addFirst(value);
+            this.table[index] = new Pair(key, new MyHashNode(value));
             this.size++;
         } else {
-            this.table[index].getValue().addFirst(value);
+            MyHashNode head = this.table[index].getValue();
+            MyHashNode newHead = new MyHashNode(value, head);
+            this.table[index].setValue(newHead);
         }
     }
     
@@ -52,7 +48,7 @@ public class MyHashTable {
         return this.size;
     }
     
-    public Pair<String, Deque<String>>[] getTable(){
+    public Pair<String, MyHashNode<Integer>>[] getTable(){
         return this.table;
     }
 }
