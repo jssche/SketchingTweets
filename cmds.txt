@@ -1,0 +1,7 @@
+decompress:
+for entry in `ls`; do lzop -d --path=/media/sf_Research_Project/RawData $entry done
+
+
+run jar:
+for i in {1..5}; do java -jar ./SketchingTweet_0.9prob_one_term_s0.5.jar $i; done
+

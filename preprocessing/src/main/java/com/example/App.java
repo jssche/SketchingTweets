@@ -87,6 +87,7 @@ public class App
         return termList;
     }
 
+
     private void writeTweet(ArrayList<String> tweets, String fileName){
         String tweetsString = "";
 
@@ -104,6 +105,7 @@ public class App
             e.printStackTrace();
         }
     }
+
 
     private void sampleTweets(double size){
 
@@ -144,22 +146,6 @@ public class App
             }
         }
     }
-
-    // private void addTweetToQueryList(String line){
-    //     List<String> termList = null;
-    //     termList = Arrays.asList(line.split(",",0));
-    //     if(termList.size() != 0){
-    //         this.queryList.add(termList);
-    //     }
-    // }
-
-    // private void addTweetToIndexedList(String line){
-    //     List<String> termList = null;
-    //     termList = Arrays.asList(line.split(",",0));
-    //     if(termList.size() != 0){
-    //         this.indexedTweetList.add(termList);
-    //     }
-    // }
 
     public static void main( String[] args )
     {   
