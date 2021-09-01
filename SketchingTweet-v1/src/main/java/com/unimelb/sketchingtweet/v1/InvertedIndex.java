@@ -12,28 +12,46 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.Scanner;
+import org.apache.commons.cli.*;
 import java.util.concurrent.TimeUnit;
 
 
 
 public class InvertedIndex {
-    
+
+    private int power;
+    private String chance;
+    private int indexTimingUnit;
+    private int queryTimingUnit;
+    private double similarityThreshold;
     private MyHashTable table = null;
+
     private int numTweet = 0;
+    private int numTerms = 0;
     private ArrayList<String> queryList = new ArrayList<String>();
-    private int indexTimingUnit = 200;
-    private int queryTimingUnit = 200;
+    private MyTermFreqTable freqTable = null;
+      
     private String[] queryResults;
     private String[] queryRestltSimilarity;
-    private ArrayList<Double> initTime = new ArrayList<Double> ();
+    private int[] lookupCounts;
+    private ArrayList<Double> indexTime = new ArrayList<Double> ();
     private ArrayList<Double> queryTime = new ArrayList<Double> ();
     
-    
-    private void initialize(String queryTweetFile, String indexTweetFile, double prob){     
 
+
+    public InvertedIndex(int indexTimingUnit, int queryTimingUnit, int power, double similarityThreshold){
+        this.indexTimingUnit = indexTimingUnit;
+        this.queryTimingUnit = queryTimingUnit;
+        this.power = power;
+        this.similarityThreshold = similarityThreshold;
+        this.chance = Double.toString((1-1/Math.pow(2, power))*100 == 0 ? 100 : (1-1/Math.pow(2, power))*100) + "%";
+        this.table = new MyHashTable();
+    }
+    
+    private void initialize(String queryTweetFile, String indexTweetFile){     
         int counter = 0;  
         Scanner inputStream = null; 
-        this.table = new MyHashTable();
+        
 
         // construct query list
         try{
@@ -41,14 +59,17 @@ public class InvertedIndex {
             while(inputStream.hasNextLine()){
                 String line = inputStream.nextLine();
                 if(line!=""){
-                    queryList.add(line);
+                    this.queryList.add(line);
                 }
             }
+            this.lookupCounts = new int[this.queryList.size()];
+            
         }
         catch(FileNotFoundException e){
             System.out.println("file not found");
         }
   
+
         // construct hash table
         try{
             inputStream = new Scanner(new FileInputStream(indexTweetFile));
@@ -56,33 +77,44 @@ public class InvertedIndex {
             while(inputStream.hasNextLine()){
                 String line = inputStream.nextLine();
                 if(line!=""){
-                    this.addTweetToTable(line, prob);
+                    this.addTweetToTable(line);
                 }
                 counter++;
                 if(counter == this.indexTimingUnit){
                     long currentTime = System.nanoTime();
                     long timeElapsed = currentTime - startTime;
-                    this.initTime.add(timeElapsed * 1.0 / 1000000.0);
+                    this.indexTime.add(timeElapsed * 1.0 / 1000000.0);
                     // System.out.println(timeElapsed * 1.0 / 1000000.0); // milliseconds
                     startTime = currentTime;
                     counter = 0;
                 }
             } 
+            this.numTerms = this.table.getSize();
         }
         catch(FileNotFoundException e){
             System.out.println("file not found");
         }
-        // System.out.println(this.queryList);
-        // System.out.println(this.queryList.size());
+        // System.out.println("Term frequency of the word 'plane': " + this.getTermFreq("plane"));
+
+
+        // construct term frequency table
+        this.freqTable = new MyTermFreqTable(this.table.getSize(), this.table);
+
+        System.out.println("Query file size: " + Integer.toString(this.queryList.size()));
+        System.out.println("Number of tweets indexed: " + this.numTweet);
+        System.out.println("Number of terms in the index (size of index list): " + this.numTerms);
+
     }
    
    
-    private boolean toInclude(String term, double prob){
-        return Murmur3.hash32(term.getBytes()) % 100 < prob * 100;
+    private boolean toInclude(String term){
+        long l = CityHash.cityHash64(term.getBytes(), 0, term.length());
+        Long denominator = (long) Math.pow(2, this.power);
+        return l % denominator != 0;
     }
 
 
-    private void addTweetToTable(String line, double prob){
+    private void addTweetToTable(String line){
 
         String term;
         List<String> termList = null;
@@ -91,23 +123,33 @@ public class InvertedIndex {
          
         if(termList.size() != 0){
             this.numTweet++;
-            // System.out.println(numTweet);
-            // System.out.println(termList);
             for(int i=0;i<termList.size();i++){
                 term = termList.get(i).trim();
-                if(prob == 1){
+                if(this.power == 0){
                     this.table.put(term, numTweet);
                 }else{
-                    if(toInclude(term, prob)){
+                    if(toInclude(term)){
                         this.table.put(term, numTweet);
-                    }   
+                    }
                 }         
             }
         }
     }
+
+
+    private int getTermFreq(String term){
+        int count;
+        try{
+            count = this.table.getTableNode(term).getCount();
+        }catch(NullPointerException e){
+            System.out.println("The term is not in the index.");
+            count = -1;
+        }
+        return count;
+    }
     
     
-    private Pair<String, String> findSimilarTweet(String query, double similarityThreshold, double prob){
+    private Pair<String, String> findSimilarTweet(String query, int queryIndex){
 
 //      get the document id list for each of the word in the new tweet
         int numTerm;
@@ -122,11 +164,11 @@ public class InvertedIndex {
         ArrayList<MyHashNode> docLists = new ArrayList<MyHashNode>();
         for(int i=0;i<numTerm;i++){
             term = termList.get(i).trim();
-            if(prob == 1){
+            if(this.power == 0){
                 fingerprint.add(term);
                 docLists.add(this.table.getDocList(term));
             }else{
-                if(toInclude(term, prob)){
+                if(toInclude(term)){
                     fingerprint.add(term);
                     docLists.add(this.table.getDocList(term));
                 }   
@@ -141,13 +183,15 @@ public class InvertedIndex {
 //      linear search
         int latestDocID = 0;
         ArrayList<Integer> latestDocIndex = new ArrayList<Integer>();
-        int threshold = (int)ceil(similarityThreshold * fingerprintSize);
+        int threshold = (int)ceil(this.similarityThreshold * fingerprintSize);
         int nullCount = 0;
+        int lookupCount = 0;
          
         while(true){
 //          latestDocID stores the max document id (the larger doc id is, the newer the doc is)
 //          latestDocIndex stores the index of the words in the new tweet that has the max doc id at front of the list/also appeared in the latest doc   
             for(int i=0;i<fingerprintSize;i++){
+                lookupCount++;
                 if(docLists.get(i)!=null){
                     if((int)docLists.get(i).getKey() > latestDocID){
                         latestDocID = (int)docLists.get(i).getKey();
@@ -166,11 +210,13 @@ public class InvertedIndex {
 //          if no, move the pointers of the words that have the max doc id to the next doc id and restores the maxDocID
             if(nullCount == fingerprintSize){
                 // System.out.println("Similarity: 0 \nNo similar tweet found");
+                this.lookupCounts[queryIndex] = -1;
                 return new Pair<String,String>("-1", "0");
             }else{
                 if(latestDocIndex.size() >= threshold){
                     double similar = (latestDocIndex.size() * 1.0)/(fingerprintSize * 1.0);
                     // System.out.println("Similarity: " + String.format("%.5f", similar) +"\n" + "The most similar doc id: " + Integer.toString(latestDocID));
+                    this.lookupCounts[queryIndex] = lookupCount;
                     return new Pair<String,String>(Integer.toString(latestDocID), String.format("%.5f", similar));
                 }else{
                     for(int i=0;i<latestDocIndex.size();i++){
@@ -185,16 +231,19 @@ public class InvertedIndex {
     }
 
 
-    private void runQueryList(ArrayList<String> queryList, double threshold, double prob){
+    private void runQueryList(ArrayList<String> queryList){
         long startTime = System.nanoTime();
         this.queryResults = new String[this.queryList.size()];
         this.queryRestltSimilarity = new String[this.queryList.size()];
 
-        for(int i=0;i<this.queryList.size();i++){
-            // System.out.println("Query id " + Integer.toString(i+1));
-            Pair<String,String> result = this.findSimilarTweet(this.queryList.get(i), threshold, prob);
+        for(int i=0;i<this.queryList.size();i++){        
+            Pair<String,String> result = this.findSimilarTweet(this.queryList.get(i), i);
             this.queryResults[i] = result.getKey();
-            this.queryRestltSimilarity[i] = result.getValue();
+            this.queryRestltSimilarity[i] = result.getValue(); 
+            // System.out.println("\nQuery id: " + Integer.toString(i+1));
+            // System.out.println("Similar tweet id: " + result.getKey());
+            // System.out.println("Similarity: " + result.getValue());
+            // System.out.println("Number of lookups: " + this.lookupCounts[i]);
 
             if(i % this.queryTimingUnit == 0){
                 long currentTime = System.nanoTime();
@@ -206,20 +255,40 @@ public class InvertedIndex {
         }
     }
 
-    private void writeQueryResult(String[] results, String fileName){
+
+    private void writeSummary(int epoch, String fileName){
+
+        String summary;
+        summary = String.format("Number of epoch: %d\nChance: %s\nIndex timing unit: %d\nQuery timeing unit: %d\nSimilarity threshold: %f\nNumber of queries: %d\nNumber of indexed tweets: %d\nIndex size: %d" 
+                    , epoch, this.chance, this.indexTimingUnit, this.queryTimingUnit, this.similarityThreshold, this.queryList.size(), this.numTweet, this.numTerms); 
+
         try {
             FileWriter myWriter = new FileWriter(fileName);
-            for(int i=0;i<this.queryList.size();i++){
-                myWriter.append(results[i] + "\n");
-            }
+            myWriter.append(summary);
             myWriter.flush();
             myWriter.close();
-            System.out.println("Successfully wrote " + fileName + "to the file.");
+            System.out.println("Successfully wrote to " + fileName);
         } catch (IOException e) {
             System.out.println("An error occurred.");
             e.printStackTrace();
         }
     }
+
+
+    private void writeDocListSize(String fileName){
+
+        try {
+            FileWriter myWriter = new FileWriter(fileName);
+            myWriter.append(this.freqTable.toString());
+            myWriter.flush();
+            myWriter.close();
+            System.out.println("Successfully wrote to " + fileName);
+        } catch (IOException e) {
+            System.out.println("An error occurred.");
+            e.printStackTrace();
+        }
+    }
+
 
     private void writeTimeResult(ArrayList<Double> results, String fileName){
         try {
@@ -229,7 +298,7 @@ public class InvertedIndex {
             }
             myWriter.flush();
             myWriter.close();
-            System.out.println("Successfully wrote " + fileName + " to the file.");
+            System.out.println("Successfully wrote to " + fileName);
         } catch (IOException e) {
             System.out.println("An error occurred.");
             e.printStackTrace();
@@ -237,15 +306,97 @@ public class InvertedIndex {
     }
 
 
-    public static void main(String[] arg){
-        double prob = 0.9;
-        InvertedIndex fileIndex = new InvertedIndex();
-        fileIndex.initialize("tweets_querying.txt", "tweets_indexing.txt", prob);
-        fileIndex.runQueryList(fileIndex.queryList, 0.5, prob);
-        fileIndex.writeTimeResult(fileIndex.initTime, "run_" + arg[0] + "_init_time.csv");
-        fileIndex.writeTimeResult(fileIndex.queryTime, "run_" + arg[0] + "_query_time.csv");
-        // "run " + arg[0] + 
-        // fileIndex.writeQueryResult(fileIndex.queryResults, "queryResults.csv");
-        // fileIndex.writeQueryResult(fileIndex.queryRestltSimilarity, "queryResultSimilarity.csv");        
+    private void writeQueryResult(String[] results, String fileName){
+        try {
+            FileWriter myWriter = new FileWriter(fileName);
+            for(int i=0;i<this.queryList.size();i++){
+                myWriter.append(results[i] + "\n");
+            }
+            myWriter.flush();
+            myWriter.close();
+            System.out.println("Successfully wrote to " + fileName);
+        } catch (IOException e) {
+            System.out.println("An error occurred.");
+            e.printStackTrace();
+        }
+    }
+
+
+    private void writeLookUps(String fileName){
+        try {
+            FileWriter myWriter = new FileWriter(fileName);
+            for(int i=0;i<this.lookupCounts.length;i++){
+                myWriter.append(Integer.toString(this.lookupCounts[i]) + "\n");
+            }
+            myWriter.flush();
+            myWriter.close();
+            System.out.println("Successfully wrote to " + fileName);
+        } catch (IOException e) {
+            System.out.println("An error occurred.");
+            e.printStackTrace();
+        }
+    }
+
+
+
+    public static void main(String[] args){
+
+        int indexTimingUnit = 1000;
+        int queryTimingUnit = 1000;
+        int power = 0;  // the chance to include a term in the index and fingerprint is 1-1/2^power, eg. power=0, 100%, power=1, 50%, power=2, 75% chance
+        double similarityThreshold = 0.6;
+        int epoch = 1;
+
+
+        Options options = new Options();
+        options.addOption("iu", true, "indexing timing unit");
+        options.addOption("qu", true, "querying timing unit");
+        options.addOption("p", true, "power of two");
+        options.addOption("s", true, "similarity threshold");
+        options.addOption("n", true, "the number of runs");
+
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine cmd = null;
+
+        try {
+            cmd = parser.parse(options, args);
+        } catch (ParseException e) {
+            System.out.println(e.getMessage());
+            formatter.printHelp("utility-name", options);
+            System.exit(1);
+        }
+
+        if(cmd.hasOption("iu")) {
+            indexTimingUnit = Integer.parseInt(cmd.getOptionValue("iu"));
+        }
+        if(cmd.hasOption("qu")) {
+            queryTimingUnit = Integer.parseInt(cmd.getOptionValue("qu"));
+        }
+        if(cmd.hasOption("p")) {
+            power = Integer.parseInt(cmd.getOptionValue("p"));
+        }
+        if(cmd.hasOption("s")) {
+            similarityThreshold = Double.parseDouble(cmd.getOptionValue("s"));
+        }
+        if(cmd.hasOption("n")) {
+            epoch = Integer.parseInt(cmd.getOptionValue("n"));
+        }
+        
+
+        InvertedIndex fileIndex = new InvertedIndex(indexTimingUnit, queryTimingUnit, power, similarityThreshold);
+        fileIndex.initialize("sampled_query_tweets.txt", "sampled_indexing_tweets.txt");
+        fileIndex.runQueryList(fileIndex.queryList);
+
+        fileIndex.writeSummary(epoch, "Epoch_" + epoch + "_experiment_summary.txt");
+        fileIndex.writeDocListSize("Epoch_" + epoch + "_term_frequencies.csv");
+        
+        fileIndex.writeTimeResult(fileIndex.indexTime, "Epoch_" + epoch + "_index_time.csv");
+        fileIndex.writeTimeResult(fileIndex.queryTime, "Epoch_" + epoch + "_query_time.csv");
+
+        fileIndex.writeQueryResult(fileIndex.queryResults, "Epoch_" + epoch + "_query_result_tweet_id.csv");
+        fileIndex.writeQueryResult(fileIndex.queryRestltSimilarity, "Epoch_" + epoch + "_query_result_similarity.csv"); 
+        
+        fileIndex.writeLookUps("Epoch_" + epoch + "_number_of_lookups.csv"); 
     }
 }

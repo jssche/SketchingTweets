@@ -1,0 +1,8 @@
+Number of epoch: 1
+Chance: 100.0%
+Index timing unit: 1000
+Query timeing unit: 1000
+Similarity threshold: 0.600000
+Number of queries: 4638
+Number of indexed tweets: 41176
+Index size: 86526

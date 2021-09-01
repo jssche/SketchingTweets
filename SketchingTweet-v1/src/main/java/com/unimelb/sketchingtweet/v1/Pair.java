@@ -1,6 +1,6 @@
 package com.unimelb.sketchingtweet.v1;
 
-public class Pair<K,V> {
+public class Pair<K,V extends Comparable<? super V>> {
     private K key;
     private V value;
     

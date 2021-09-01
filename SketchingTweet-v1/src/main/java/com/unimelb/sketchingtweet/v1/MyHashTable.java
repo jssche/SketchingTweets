@@ -5,7 +5,7 @@ public class MyHashTable {
     // private Pair<String, MyHashNode<Integer>>[] table;
     private MyHashTableNode[] table;
     private int size;
-    private final int maxSize = 16384; 
+    private final int maxSize = (int) Math.pow(2, 20); 
     
     
     public MyHashTable(){
@@ -67,6 +67,7 @@ public class MyHashTable {
         return this.table[index];
     }
     
+
     public MyHashTableNode[] getTable(){
         return this.table;
     }
