@@ -259,7 +259,7 @@ public class InvertedIndex {
     private void writeSummary(int epoch, String fileName){
 
         String summary;
-        summary = String.format("Epoch, %d\nChance, %s\nIndex timing unit, %d\nQuery timeing unit, %d\nSimilarity threshold, %f\nNumber of queries, %d\nNumber of indexed tweets, %d\nIndex size, %d" 
+        summary = String.format("%d\n%s\n%d\n%d\n%f\n%d\n%d\n%d" 
                     , epoch, this.chance, this.indexTimingUnit, this.queryTimingUnit, this.similarityThreshold, this.queryList.size(), this.numTweet, this.numTerms); 
 
         try {
