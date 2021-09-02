@@ -23,7 +23,7 @@ public class InvertedIndex {
     private String chance;
     private int indexTimingUnit;
     private int queryTimingUnit;
-    private double similarityThreshold;
+    private final double similarityThreshold;
     private MyHashTable table = null;
 
     private int numTweet = 0;
@@ -259,7 +259,7 @@ public class InvertedIndex {
     private void writeSummary(int epoch, String fileName){
 
         String summary;
-        summary = String.format("Number of epoch: %d\nChance: %s\nIndex timing unit: %d\nQuery timeing unit: %d\nSimilarity threshold: %f\nNumber of queries: %d\nNumber of indexed tweets: %d\nIndex size: %d" 
+        summary = String.format("Epoch, %d\nChance, %s\nIndex timing unit, %d\nQuery timeing unit, %d\nSimilarity threshold, %f\nNumber of queries, %d\nNumber of indexed tweets, %d\nIndex size, %d" 
                     , epoch, this.chance, this.indexTimingUnit, this.queryTimingUnit, this.similarityThreshold, this.queryList.size(), this.numTweet, this.numTerms); 
 
         try {
@@ -346,6 +346,8 @@ public class InvertedIndex {
         int power = 0;  // the chance to include a term in the index and fingerprint is 1-1/2^power, eg. power=0, 100%, power=1, 50%, power=2, 75% chance
         double similarityThreshold = 0.6;
         int epoch = 1;
+        String input_dir = "./input/";
+        String output_dir = "./output/";
 
 
         Options options = new Options();
@@ -353,7 +355,10 @@ public class InvertedIndex {
         options.addOption("qu", true, "querying timing unit");
         options.addOption("p", true, "power of two");
         options.addOption("s", true, "similarity threshold");
-        options.addOption("n", true, "the number of runs");
+        options.addOption("n", true, "epoch");
+        options.addOption("i", true, "input directory");
+        options.addOption("o", true, "output directory");
+
 
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -382,21 +387,31 @@ public class InvertedIndex {
         if(cmd.hasOption("n")) {
             epoch = Integer.parseInt(cmd.getOptionValue("n"));
         }
+        if(cmd.hasOption("i")) {
+            input_dir = cmd.getOptionValue("i");
+        }
+        if(cmd.hasOption("o")) {
+            output_dir = cmd.getOptionValue("o");
+        }
         
 
         InvertedIndex fileIndex = new InvertedIndex(indexTimingUnit, queryTimingUnit, power, similarityThreshold);
-        fileIndex.initialize("sampled_query_tweets.txt", "sampled_indexing_tweets.txt");
+        fileIndex.initialize(input_dir + "sampled_query_tweets.txt", input_dir +"sampled_indexing_tweets.txt");
         fileIndex.runQueryList(fileIndex.queryList);
 
-        fileIndex.writeSummary(epoch, "Epoch_" + epoch + "_experiment_summary.txt");
-        fileIndex.writeDocListSize("Epoch_" + epoch + "_term_frequencies.csv");
+        String filenameTemplate = String.format("%sEpoch_%d_iu_%d_qu_%d_p_%d_s_%.2f", output_dir, epoch, indexTimingUnit, queryTimingUnit, power, similarityThreshold);
+        if(epoch == 1){
+            
+            fileIndex.writeSummary(epoch, filenameTemplate + "_summary.csv");
+            fileIndex.writeDocListSize(filenameTemplate + "_term_freq.csv");
+            
+            fileIndex.writeQueryResult(fileIndex.queryResults, filenameTemplate + "_query_result.csv");
+            fileIndex.writeQueryResult(fileIndex.queryRestltSimilarity, filenameTemplate + "_query_similarity.csv"); 
+            
+            fileIndex.writeLookUps(filenameTemplate + "_lookups.csv"); 
+        }
         
-        fileIndex.writeTimeResult(fileIndex.indexTime, "Epoch_" + epoch + "_index_time.csv");
-        fileIndex.writeTimeResult(fileIndex.queryTime, "Epoch_" + epoch + "_query_time.csv");
-
-        fileIndex.writeQueryResult(fileIndex.queryResults, "Epoch_" + epoch + "_query_result_tweet_id.csv");
-        fileIndex.writeQueryResult(fileIndex.queryRestltSimilarity, "Epoch_" + epoch + "_query_result_similarity.csv"); 
-        
-        fileIndex.writeLookUps("Epoch_" + epoch + "_number_of_lookups.csv"); 
+        fileIndex.writeTimeResult(fileIndex.indexTime, filenameTemplate + "_index_time.csv");
+        fileIndex.writeTimeResult(fileIndex.queryTime, filenameTemplate + "_query_time.csv");
     }
 }
