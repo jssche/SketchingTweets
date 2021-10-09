@@ -14,16 +14,20 @@ import org.json.*;
 
 public class App 
 {
-    private List<String> stopwords = Arrays.asList("rt", "a", "about", "above", "after", "again", "against", "ain", "all", "am", "an", "and", "any", "are", "aren", "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", "couldn", "couldn't", "d", "did", "didn", "didn't", "do", "does", "doesn", "doesn't", "doing", "don", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn", "hadn't", "has", "hasn", "hasn't", "have", "haven", "haven't", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how", "i", "if", "in", "into", "is", "isn", "isn't", "it", "it's", "its", "itself", "just", "ll", "m", "ma", "me", "mightn", "mightn't", "more", "most", "mustn", "mustn't", "my", "myself", "needn", "needn't", "no", "nor", "not", "now", "o", "of", "off", "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own", "re", "s", "same", "shan", "shan't", "she", "she's", "should", "should've", "shouldn", "shouldn't", "so", "some", "such", "t", "than", "that", "that'll", "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", "until", "up", "ve", "very", "was", "wasn", "wasn't", "we", "were", "weren", "weren't", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "won", "won't", "wouldn", "wouldn't", "y", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves", "could", "he'd", "he'll", "he's", "here's", "how's", "i'd", "i'll", "i'm", "i've", "let's", "ought", "she'd", "she'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "we'd", "we'll", "we're", "we've", "what's", "when's", "where's", "who's", "why's", "would");
     private ArrayList<String> tweets = new ArrayList<String>();
     private ArrayList<Integer> tweetLengths  = new ArrayList<Integer>(); 
     private int lengthThreshold = 6;
     private ArrayList<String> indexedTweetList = new ArrayList<String>();
     private ArrayList<String> queryList = new ArrayList<String>();
+    private int totalTweet = 0;
 
 
     private int getTweetsCount(){
         return this.tweets.size();
+    }
+
+    public int getTotalTweet(){
+        return this.totalTweet;
     }
 
 
@@ -63,7 +67,8 @@ public class App
         ArrayList<String> termList = null;
          
         try {
-            JSONObject jsonLine = new JSONObject(line);          
+            JSONObject jsonLine = new JSONObject(line);       
+            totalTweet++;   
             termList = this.cleanTweet(jsonLine.getString("text"));            
             if(termList.size() >= this.lengthThreshold){
                 terms = termList.toString();
@@ -90,7 +95,6 @@ public class App
                 termList.add(textArray[i].trim());
             }
         }
-        termList.removeAll(this.stopwords);
         return termList;
     }
 
@@ -119,6 +123,7 @@ public class App
         System.out.println("25th percentile of tweet length: " + this.tweetLengths.get(index25-1));
         System.out.println("50th percentile of tweet length: " + this.tweetLengths.get(index50-1));
         System.out.println("75th percentile of tweet length: " + this.tweetLengths.get(index75-1));
+        System.out.println("Max tweet length: " + this.tweetLengths.get(this.tweetLengths.size()-1));
     }
 
 
@@ -136,7 +141,7 @@ public class App
         while(inputStream.hasNextLine()){
             String line = inputStream.nextLine();
             if(line!=""){
-                textArray = line.split(",",0);
+                textArray = line.split(",", 0);
                 this.tweetLengths.add(textArray.length);
             }
         }
@@ -185,6 +190,9 @@ public class App
         Random rand = new Random();
         rand.setSeed(5);
 
+        this.indexedTweetList.clear();
+        this.queryList.clear();
+
         try{
             inputStream = new Scanner(new FileInputStream(filename));
         }
@@ -209,20 +217,16 @@ public class App
         App prerocessor = new App();
         // final File folder = new File("C:\\Users\\cheng\\Documents\\Study\\Research Project\\RawData");
         // prerocessor.processFilesForFolder(folder);
+        // System.out.println(prerocessor.getTotalTweet());
         // prerocessor.findTweetLengthStats();
         // prerocessor.sampleTweets(prerocessor.getTweetsCount() * 0.2);
 
-        // prerocessor.divideIndexQueryTweets("processedTweets.txt");
-        // prerocessor.findTweetLengthStats("processedTweets.txt");
-        // prerocessor.writeTweet(prerocessor.indexedTweetList, "indexing_tweets.txt");
-        // prerocessor.writeTweet(prerocessor.queryList, "query_tweets.txt");
+        prerocessor.divideIndexQueryTweets("processedTweets_stemmed.txt");
+        prerocessor.writeTweet(prerocessor.indexedTweetList, "indexing_tweets_stemmed.txt");
+        prerocessor.writeTweet(prerocessor.queryList, "query_tweets_stemmed.txt");
 
-        // prerocessor.divideIndexQueryTweets("sampledTweets.txt");
-        // prerocessor.findTweetLengthStats("sampledTweets.txt");
-        // prerocessor.writeTweet(prerocessor.indexedTweetList, "sampled_indexing_tweets.txt");
-        // prerocessor.writeTweet(prerocessor.queryList, "sampled_query_tweets.txt");
-
-        // prerocessor.findTweetLengthStats("sampled_indexing_tweets.txt");
-        // prerocessor.findTweetLengthStats("sampled_query_tweets.txt");
+        prerocessor.divideIndexQueryTweets("sampledTweets_stemmed.txt");
+        prerocessor.writeTweet(prerocessor.indexedTweetList, "sampled_indexing_tweets_stemmed.txt");
+        prerocessor.writeTweet(prerocessor.queryList, "sampled_query_tweets_stemmed.txt");
     }
 }

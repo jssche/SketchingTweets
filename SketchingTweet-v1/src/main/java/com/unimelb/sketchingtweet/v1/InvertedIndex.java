@@ -13,13 +13,12 @@ import java.util.List;
 import java.util.Random;
 import java.util.Scanner;
 import org.apache.commons.cli.*;
-import java.util.concurrent.TimeUnit;
 
 
 
 public class InvertedIndex {
 
-    private int power;
+    private double gamma;
     private String chance;
     private int indexTimingUnit;
     private int queryTimingUnit;
@@ -36,16 +35,18 @@ public class InvertedIndex {
     private int[] lookupCounts;
     private ArrayList<Double> indexTime = new ArrayList<Double> ();
     private ArrayList<Double> queryTime = new ArrayList<Double> ();
-    
+    private Random random;
 
 
-    public InvertedIndex(int indexTimingUnit, int queryTimingUnit, int power, double similarityThreshold){
+    public InvertedIndex(int indexTimingUnit, int queryTimingUnit, double gamma, double similarityThreshold){
         this.indexTimingUnit = indexTimingUnit;
         this.queryTimingUnit = queryTimingUnit;
-        this.power = power;
+        this.gamma = gamma;
         this.similarityThreshold = similarityThreshold;
-        this.chance = Double.toString((1-1/Math.pow(2, power))*100 == 0 ? 100 : (1-1/Math.pow(2, power))*100) + "%";
+        // this.chance = Double.toString((1-1/Math.pow(2, gamma))*100 == 0 ? 100 : (1-1/Math.pow(2, gamma))*100) + "%";
+        this.chance = Double.toString(this.gamma * 100) + "%";
         this.table = new MyHashTable();
+        this.random = new java.util.Random();
     }
     
     private void initialize(String queryTweetFile, String indexTweetFile){     
@@ -99,39 +100,72 @@ public class InvertedIndex {
 
         // construct term frequency table
         this.freqTable = new MyTermFreqTable(this.table.getSize(), this.table);
-
-        System.out.println("Query file size: " + Integer.toString(this.queryList.size()));
-        System.out.println("Number of tweets indexed: " + this.numTweet);
-        System.out.println("Number of terms in the index (size of index list): " + this.numTerms);
-
+        // System.out.println("Query file size: " + Integer.toString(this.queryList.size()));
+        // System.out.println("Number of tweets indexed: " + this.numTweet);
+        // System.out.println("Index size (Number of non-empty posting lists): " + this.numTerms);
     }
    
    
     private boolean toInclude(String term){
         long l = CityHash.cityHash64(term.getBytes(), 0, term.length());
-        Long denominator = (long) Math.pow(2, this.power);
-        return l % denominator != 0;
+        // Long denominator = (long) Math.pow(2, this.gamma);
+        // return l % denominator != 0;
+        return l % 100 < this.gamma * 100;
+    }
+
+
+    private ArrayList<String> createFingerprint(List<String> termList){
+        ArrayList<String> fingerprint = new ArrayList<String>();
+        ArrayList<String> history = new ArrayList<String>();
+        
+
+        for(int i=0;i<termList.size();i++){
+            while(true){
+                int index = this.random.nextInt(termList.size());
+                String term  = termList.get(index).trim();
+                
+                // System.out.println(term);
+                // System.out.println(history.size() + "," + termList.size());
+
+                if(!history.contains(term)){
+                    history.add(term);
+                    if(toInclude(term)){
+                        fingerprint.add(term);
+                        // System.out.println(history);
+                        // System.out.println(fingerprint);
+                        break;
+                    } 
+                }
+                
+                if(history.size() >= termList.size()){
+                    break;
+                }  
+            }
+        }
+
+        return fingerprint;
     }
 
 
     private void addTweetToTable(String line){
-
         String term;
         List<String> termList = null;
+        ArrayList<String> fingerprint = null;
 
         termList = Arrays.asList(line.split(",",0));
          
         if(termList.size() != 0){
             this.numTweet++;
-            for(int i=0;i<termList.size();i++){
-                term = termList.get(i).trim();
-                if(this.power == 0){
+            if(this.gamma == 1){
+                for(int i=0;i<termList.size();i++){
+                    term = termList.get(i).trim();
                     this.table.put(term, numTweet);
-                }else{
-                    if(toInclude(term)){
-                        this.table.put(term, numTweet);
-                    }
-                }         
+                }
+            }else{
+                fingerprint = this.createFingerprint(termList);
+                for(int i=0;i<fingerprint.size();i++){
+                    this.table.put(fingerprint.get(i), numTweet);
+                }
             }
         }
     }
@@ -156,24 +190,59 @@ public class InvertedIndex {
         String term;
         int fingerprintSize;
         List<String> termList;
-        ArrayList<String> fingerprint = new ArrayList<String> ();
+        ArrayList<String> fingerprint2 = null;
+        // ArrayList<String> fingerprint = new ArrayList<String>();
+        
 
         termList = Arrays.asList(query.split(",", 0));
         numTerm = termList.size();
-        // MyHashNode[] docLists = new MyHashNode[numTerm];
         ArrayList<MyHashNode> docLists = new ArrayList<MyHashNode>();
-        for(int i=0;i<numTerm;i++){
-            term = termList.get(i).trim();
-            if(this.power == 0){
-                fingerprint.add(term);
+
+        // for(int i=0;i<numTerm;i++){
+        //     term = termList.get(i).trim();
+        //     if(this.gamma == 1){
+        //         fingerprint.add(term);
+        //         docLists.add(this.table.getDocList(term));
+        //     }else{
+        //         if(toInclude(term)){
+        //             fingerprint.add(term);
+        //             docLists.add(this.table.getDocList(term));
+        //         }   
+        //     }     
+        // }
+        
+
+        if(this.gamma == 1){
+            for(int i=0;i<numTerm;i++){
+                term = termList.get(i).trim();
                 docLists.add(this.table.getDocList(term));
-            }else{
-                if(toInclude(term)){
-                    fingerprint.add(term);
-                    docLists.add(this.table.getDocList(term));
-                }   
-            }    
+            }
+        }else{
+            fingerprint2 = this.createFingerprint(termList);
+
+            for(int i=0;i<fingerprint2.size();i++){
+                term = termList.get(i).trim();
+                docLists.add(this.table.getDocList(term));
+            }
         }
+
+        // if(fingerprint.size() != fingerprint2.size()){
+        //     System.out.println("fingerprint != fingerprint2");
+        //     System.out.println(fingerprint);
+        //     System.out.println(fingerprint2);
+            // System.out.println("fingerprint");
+            // for(int i=0;i<fingerprint.size();i++){
+            //     System.out.println(fingerprint.get(i));
+            //     System.out.println(toInclude(fingerprint.get(i)));
+            // }
+            // System.out.println("fingerprint2");
+            // for(int i=0;i<fingerprint2.size();i++){
+            //     System.out.println(fingerprint2.get(i));
+            //     System.out.println(toInclude(fingerprint2.get(i)));
+            // }
+        // }
+
+
         fingerprintSize = docLists.size();
         // System.out.println(numTerm);
         // System.out.println(fingerprint);
@@ -276,7 +345,6 @@ public class InvertedIndex {
 
 
     private void writeDocListSize(String fileName){
-
         try {
             FileWriter myWriter = new FileWriter(fileName);
             myWriter.append(this.freqTable.toString());
@@ -343,17 +411,17 @@ public class InvertedIndex {
 
         int indexTimingUnit = 1000;
         int queryTimingUnit = 1000;
-        int power = 0;  // the chance to include a term in the index and fingerprint is 1-1/2^power, eg. power=0, 100%, power=1, 50%, power=2, 75% chance
-        double similarityThreshold = 0.6;
+        double gamma = 0.9;  // the chance to include a term in the index and fingerprint is 1-1/2^gamma, eg. gamma=0, 100%, gamma=1, 50%, gamma=2, 75% chance
+        double similarityThreshold = 0.5;
         int epoch = 1;
         String input_dir = "./input/";
-        String output_dir = "./output/";
+        String output_dir = "./output_expm1/";
 
 
         Options options = new Options();
         options.addOption("iu", true, "indexing timing unit");
         options.addOption("qu", true, "querying timing unit");
-        options.addOption("p", true, "power of two");
+        options.addOption("p", true, "gamma");
         options.addOption("s", true, "similarity threshold");
         options.addOption("n", true, "epoch");
         options.addOption("i", true, "input directory");
@@ -379,7 +447,7 @@ public class InvertedIndex {
             queryTimingUnit = Integer.parseInt(cmd.getOptionValue("qu"));
         }
         if(cmd.hasOption("p")) {
-            power = Integer.parseInt(cmd.getOptionValue("p"));
+            gamma = Double.parseDouble(cmd.getOptionValue("p"));
         }
         if(cmd.hasOption("s")) {
             similarityThreshold = Double.parseDouble(cmd.getOptionValue("s"));
@@ -395,11 +463,11 @@ public class InvertedIndex {
         }
         
 
-        InvertedIndex fileIndex = new InvertedIndex(indexTimingUnit, queryTimingUnit, power, similarityThreshold);
-        fileIndex.initialize(input_dir + "sampled_query_tweets.txt", input_dir +"sampled_indexing_tweets.txt");
+        InvertedIndex fileIndex = new InvertedIndex(indexTimingUnit, queryTimingUnit, gamma, similarityThreshold);
+        fileIndex.initialize(input_dir + "query_tweets_stemmed_nodigrep.txt", input_dir +"indexing_tweets_stemmed_nodigrep.txt");
         fileIndex.runQueryList(fileIndex.queryList);
 
-        String filenameTemplate = String.format("%sEpoch_%d_iu_%d_qu_%d_p_%d_s_%.2f", output_dir, epoch, indexTimingUnit, queryTimingUnit, power, similarityThreshold);
+        String filenameTemplate = String.format("%sEpoch_%d_iu_%d_qu_%d_p_%s_s_%.2f", output_dir, epoch, indexTimingUnit, queryTimingUnit, Double.toString(gamma), similarityThreshold);
         if(epoch == 1){
             
             fileIndex.writeSummary(epoch, filenameTemplate + "_summary.csv");
