@@ -115,40 +115,46 @@ public class InvertedIndex {
 
 
     private ArrayList<String> createFingerprint(List<String> termList){
+        String term;
         ArrayList<String> fingerprint = new ArrayList<String>();
         ArrayList<String> history = new ArrayList<String>();
-        
 
-        for(int i=0;i<termList.size();i++){
-            while(true){
-                int index = this.random.nextInt(termList.size());
-                String term  = termList.get(index).trim();
-                
-                // System.out.println(term);
-                // System.out.println(history.size() + "," + termList.size());
-
-                if(!history.contains(term)){
-                    history.add(term);
-                    if(toInclude(term)){
-                        fingerprint.add(term);
-                        // System.out.println(history);
-                        // System.out.println(fingerprint);
+        if(this.gamma == 1){
+            for(int i=0;i<termList.size();i++){
+                term = termList.get(i).trim();
+                fingerprint.add(term);
+            }
+        }else{
+            int size = Math.min(termList.size(), 21);
+            for(int i=0;i<size;i++){
+                while(true){
+                    int index = this.random.nextInt(termList.size());
+                    term  = termList.get(index).trim();
+                    
+                    // System.out.println(term);
+                    // System.out.println(history.size() + "," + termList.size());
+    
+                    if(!history.contains(term)){
+                        history.add(term);
+                        if(toInclude(term)){
+                            fingerprint.add(term);
+                            // System.out.println(history);
+                            // System.out.println(fingerprint);
+                            break;
+                        } 
+                    }
+                    
+                    if(history.size() >= termList.size()){
                         break;
-                    } 
+                    }  
                 }
-                
-                if(history.size() >= termList.size()){
-                    break;
-                }  
             }
         }
-
         return fingerprint;
     }
 
 
     private void addTweetToTable(String line){
-        String term;
         List<String> termList = null;
         ArrayList<String> fingerprint = null;
 
@@ -156,16 +162,9 @@ public class InvertedIndex {
          
         if(termList.size() != 0){
             this.numTweet++;
-            if(this.gamma == 1){
-                for(int i=0;i<termList.size();i++){
-                    term = termList.get(i).trim();
-                    this.table.put(term, numTweet);
-                }
-            }else{
-                fingerprint = this.createFingerprint(termList);
-                for(int i=0;i<fingerprint.size();i++){
-                    this.table.put(fingerprint.get(i), numTweet);
-                }
+            fingerprint = this.createFingerprint(termList);
+            for(int i=0;i<fingerprint.size();i++){
+                this.table.put(fingerprint.get(i), numTweet);
             }
         }
     }
@@ -191,40 +190,17 @@ public class InvertedIndex {
         int fingerprintSize;
         List<String> termList;
         ArrayList<String> fingerprint2 = null;
-        // ArrayList<String> fingerprint = new ArrayList<String>();
-        
 
         termList = Arrays.asList(query.split(",", 0));
         numTerm = termList.size();
         ArrayList<MyHashNode> docLists = new ArrayList<MyHashNode>();
 
-        // for(int i=0;i<numTerm;i++){
-        //     term = termList.get(i).trim();
-        //     if(this.gamma == 1){
-        //         fingerprint.add(term);
-        //         docLists.add(this.table.getDocList(term));
-        //     }else{
-        //         if(toInclude(term)){
-        //             fingerprint.add(term);
-        //             docLists.add(this.table.getDocList(term));
-        //         }   
-        //     }     
-        // }
-        
-
-        if(this.gamma == 1){
-            for(int i=0;i<numTerm;i++){
-                term = termList.get(i).trim();
-                docLists.add(this.table.getDocList(term));
-            }
-        }else{
-            fingerprint2 = this.createFingerprint(termList);
-
-            for(int i=0;i<fingerprint2.size();i++){
-                term = termList.get(i).trim();
-                docLists.add(this.table.getDocList(term));
-            }
+        fingerprint2 = this.createFingerprint(termList);
+        for(int i=0;i<fingerprint2.size();i++){
+            term = termList.get(i).trim();
+            docLists.add(this.table.getDocList(term));
         }
+        
 
         // if(fingerprint.size() != fingerprint2.size()){
         //     System.out.println("fingerprint != fingerprint2");
