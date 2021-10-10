@@ -110,6 +110,7 @@ public class InvertedIndex {
         long l = CityHash.cityHash64(term.getBytes(), 0, term.length());
         // Long denominator = (long) Math.pow(2, this.gamma);
         // return l % denominator != 0;
+        l = l < 0 ? l * -1 : l; 
         return l % 100 < this.gamma * 100;
     }
 
@@ -125,7 +126,7 @@ public class InvertedIndex {
                 fingerprint.add(term);
             }
         }else{
-            int size = Math.min(termList.size(), 21);
+            int size = Math.min(termList.size(), 7);
             for(int i=0;i<size;i++){
                 while(true){
                     int index = this.random.nextInt(termList.size());
@@ -197,7 +198,7 @@ public class InvertedIndex {
 
         fingerprint2 = this.createFingerprint(termList);
         for(int i=0;i<fingerprint2.size();i++){
-            term = termList.get(i).trim();
+            term = fingerprint2.get(i).trim();
             docLists.add(this.table.getDocList(term));
         }
         
@@ -323,7 +324,9 @@ public class InvertedIndex {
     private void writeDocListSize(String fileName){
         try {
             FileWriter myWriter = new FileWriter(fileName);
-            myWriter.append(this.freqTable.toString());
+            for(Pair<Pair<String, Integer>,Integer> entry: this.freqTable.getMyTermFreqTable()){
+                myWriter.append(entry.getKey().getKey() + "," + entry.getKey().getValue() + ","  + entry.getValue() + "\n");
+            }
             myWriter.flush();
             myWriter.close();
             System.out.println("Successfully wrote to " + fileName);
